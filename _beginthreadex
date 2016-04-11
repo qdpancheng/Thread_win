@@ -1,0 +1,109 @@
+//创建多线程
+
+  _beginthreadex()函数在创建新线程时会分配并初始化一个_tiddata块。这个_tiddata块自然是用来存放一些需要线程独享的数据。事实上新线程运行时
+会首先将_tiddata块与自己进一步关联起来。然后新线程调用标准C运行库函数如strtok()时就会先取得_tiddata块的地址再将需要保护的数据
+存入_tiddata块中。这样每个线程就只会访问和修改自己的数据而不会去篡改其它线程的数据了。因此，如果在代码中有使用标准C运行库中的函数时，尽
+量使用_beginthreadex()来代替CreateThread()。
+
+uintptr_t _beginthreadex( // NATIVE CODE
+   void *security,
+   unsigned stack_size,
+   unsigned ( __stdcall *start_address )( void * ),
+   void *arglist,
+   unsigned initflag,
+   unsigned *thrdaddr 
+);
+Parameters参数注解
+
+start_address
+Start address of a routine that begins execution of a new thread. For _beginthread, the calling convention is 
+either __cdecl (for native code) or __clrcall (for managed code); for _beginthreadex, it is either __stdcall (for native code) 
+or __clrcall (for managed code).
+
+stack_size
+Stack size for a new thread, or 0.
+
+arglist
+Argument list to be passed to a new thread, or NULL.
+
+Security
+Pointer to a SECURITY_ATTRIBUTES structure that determines whether the returned handle can be inherited by child processes. 
+If Security is NULL, the handle cannot be inherited. Must be NULL for Windows 95 applications.
+
+initflag
+Flags that control the initial state of a new thread. Set initflag to 0 to run immediately, or to CREATE_SUSPENDED to create the 
+thread in a suspended state; use ResumeThread to execute the thread. Set initflag to STACK_SIZE_PARAM_IS_A_RESERVATION flag to use 
+stack_size as the initial reserve size of the stack in bytes; if this flag is not specified, stack_size specifies the commit size.
+
+thrdaddr
+Points to a 32-bit variable that receives the thread identifier. If it's NULL, it's not used.
+
+Return Value
+If successful, each of these functions returns a handle to the newly created thread; however, if the newly created thread exits too 
+quickly, _beginthread might not return a valid handle. (See the discussion in the Remarks section.) On an error, _beginthread 
+returns -1L, and errno is set to EAGAIN if there are too many threads, to EINVAL if the argument is invalid or the stack size is 
+incorrect, or to EACCES if there are insufficient resources (such as memory). On an error, _beginthreadex returns 0, and errno and
+_doserrno are set.
+If startaddress is NULL, the invalid parameter handler is invoked, as described in Parameter Validation. If execution is allowed to
+continue, these functions set errno to EINVAL and return -1.
+
+
+
+code 如下：
+
+#include "stdafx.h"
+//创建线程使用_beginthreadex()
+#include <iostream>
+#include <process.h>
+#include <windows.h>
+
+using namespace std;
+
+unsigned int WINAPI mythreadFun(void* pArgument)
+{
+	cout << "这是我创建的线程输出" << endl;
+	return 0;
+}
+
+int main()
+{
+	HANDLE hthread;
+	//创建一个线程
+	hthread = (HANDLE)_beginthreadex(NULL, 0, &mythreadFun, NULL, 0, 0);
+	cout << "创建了一个线程，其ID为" << GetCurrentThreadId() << endl;
+	WaitForSingleObject(hthread, INFINITE);
+	//销毁线程
+	CloseHandle(hthread);
+	system("pause");
+	return 0;
+}
+
+/**********************************************************************************************/
+1、
+DWORD WINAPI WaitForSingleObject(
+  _In_ HANDLE hHandle,
+  _In_ DWORD  dwMilliseconds
+);
+函数说明：
+
+第一个参数为要等待的内核对象。
+
+第二个参数为最长等待的时间，以毫秒为单位，如传入5000就表示5秒，传入0就立即返回，传入INFINITE表示无限等待。
+
+因为线程的句柄在线程运行时是未触发的，线程结束运行，句柄处于触发状态。所以可以用WaitForSingleObject()来等待一个线程结束运行。
+
+函数返回值：
+
+在指定的时间内对象被触发，函数返回WAIT_OBJECT_0。超过最长等待时间对象仍未被触发返回WAIT_TIMEOUT。传入参数有错误将返回WAIT_FAILED
+
+
+2、运行结果如下所示：
+创建了一个线程，其ID为12516
+这是我创建的线程输出
+请按任意键继续. . .
+创建完线程，主线程还会继续运行一会，启动创建的线程需要一定的时间。
+
+
+3、线程使用完毕后需要销毁，由父线程负责销毁。
+
+4、创建的线程函数必须有返回值，返回值为unsigned int， 调用方式为WINAPI也就是__stdcall,参数为void * 也就是 void *arglist
